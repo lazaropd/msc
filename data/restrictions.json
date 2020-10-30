@@ -1,0 +1,12 @@
+{
+    "simult": {"max": 3},
+    "simultproc": {"max": 1},
+    "equips": {
+        "velashape": 1,
+        "crio": 1,
+        "radio": 1,
+        "vibria": 1,
+        "vapor": 1,
+        "cmslim": 1
+    }
+}
