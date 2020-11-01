@@ -1,0 +1,11 @@
+{
+    "id": "90f558e9f957104829b8677cd1002c9c",
+    "id_usuario": "a13b2ba3b40bb40dda5780d2e145bda6",
+    "id_paciente": "4fbc7143eef822a493e825bc103ee0f4",
+    "tp": "R$",
+    "fmt": "Dinheiro",
+    "pct": 0,
+    "vl_total": 0,
+    "vl_comissao": 0,
+    "cancelado": true
+}

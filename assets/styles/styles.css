@@ -38,21 +38,27 @@ body{
     html{font-size: 1.0em;} /*overrides for small screen devices*/
 }
 footer{display: none;}
-h1, h2{
+h1, h2, h3{
     padding: 5px !important;
     color: var(--fontbutcolor) !important;
     background-color: var(--bgbutcolor) !important;
     text-align: center;
 }
+h3{
+    background-color: var(--bgbutcolorhover) !important;
+}
 hr{
     margin: 0.2rem !important;
     border-bottom: 1px solid var(--fontcolor) !important;
 }
-label, p:not(.alert), h1, h2{    
+label, h1, h2{    
     padding: var(--padding) !important;
     border-radius: var(--borderradius) !important;
     border: 1px solid var(--bordercolor);    
     box-shadow: var(--shadow) rgba(0, 0, 0, .6);        
+}
+p:not(.alert){
+    border: 0px;
 }
 
 /* set the overall appearance and background for this app */
@@ -121,7 +127,7 @@ div.stBlock-horiz{
 div.element-container{
     display: inline-block !important;
     height: auto !important;
-    width: max-content !important;
+    /*width: max-content !important;*/
     font-size: var(--fontsize);  
     margin: 0px !important;  
     padding: 5px 0 !important;    
@@ -135,7 +141,7 @@ div.stSelectbox > div > div > div > div{
 }
 
 /* now we can deep in our widgets setup */
-div.element-container > div.Widget:not(.stNumberInput):not(.stTimeInput):not(.stDateInput):not(.stTextInput):not(.stTextArea):not(.stSelectbox):not(.stMultiSelect):not(.stSlider):not(.stFileUploader){
+div.element-container > div.Widget:not(.stNumberInput):not(.stTimeInput):not(.stDateInput):not(.stTextInput):not(.stTextArea):not(.stSelectbox):not(.stMultiSelect):not(.stSlider):not(.stFileUploader):not(.stAlert){
     width: max-content !important;
 }
 .stFileUploader{
@@ -159,8 +165,11 @@ div.element-container > div.Widget:not(.stNumberInput):not(.stTimeInput):not(.st
 }
 
 .alert{
-    margin: 0px;
+    /*margin: 0px;*/
     padding: 0.5rem;
+}
+.stAlert > div > div > div > p{
+    text-align: center;
 }
 span.as{background-color: var(--bgbutcolor) !important;}
 .stCheckbox label>span{background-color: var(--bgbutcolor) !important;}
@@ -191,8 +200,39 @@ div.element-container > div.stEmpty{
     display: block !important;
     visibility: hidden;
 }
+.stDataFrame{
+    margin: auto;
+}
+.dataframe, .stTable{
+    font-family: "IBM Plex Sans",sans-serif !important;
+    font-size: 0.8rem !important;
+    padding: 3px !important;
+    display: flex;
+    justify-content: center;
+    /*border: 1px solid var(--bordercolorstrong) !important;*/
+    align-items: center;
+}
+.col-header, .row-header, .corner, .stTable th{
+    font-weight: bold !important;
+    background-color: var(--bgbutcolor) !important;
+    color: var(--fontbutcolor) !important;
+}
+.row-header, .corner{
+    border: 1px solid var(--bgbutcolor) !important;
+}
+.col-header, .stTable > table > tbody > tr > th{
+    justify-content: right;
+    background-color: var(--fontcolor) !important;
+}
+.stTable th, .stTable td{
+    padding: 7px !important;
+    text-align: center;
+}
 
 /* here were gonna change our buttons layout to make them more beautifull and intuitive */
+.stButton{
+    margin: auto !important;
+}
 button{
     background-color: var(--bgbutcolor) !important;
     color: var(--fontbutcolor) !important;

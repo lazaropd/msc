@@ -1,0 +1,10 @@
+{
+    "id": "1df0c9f49d221200e023815ca29ba4f9",
+    "id_usuario": "a13b2ba3b40bb40dda5780d2e145bda6",
+    "id_paciente": "e3391b761db008252c1d5194b7eb175f",
+    "tp": "R$",
+    "fmt": "Dinheiro",
+    "pct": 50,
+    "vl_total": 250.0,
+    "vl_comissao": 50
+}

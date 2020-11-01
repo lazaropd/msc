@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import base64 
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as ticker
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as ttime
 
 
 # FIXED PARAMS INSIDE CODE
@@ -33,12 +34,13 @@ sched_path  = 'https://app.mysmartclinic.com.br/ajax/agenda-list.php?tp=l&de=FRO
 
 EQUIPS_FILE = r'data/equip_restrictions.json'
 RESTR_FILE  = r'data/restrictions.json'
+PROCESSED   = r'processed/'
 
 STYLE_FILE  = r'assets/styles/styles.css'
 LOGO_FILE   = r'assets/images/logo_wide.png'
 PAGE_TITLE  = 'MSC'
 PAGE_ICON   = '👩‍⚕️'
-PAGE_LAYOUT = 'wide' # wide or centered
+PAGE_LAYOUT = 'centered' # wide or centered
 state       = SessionState.get(authorized=False, page='home', cookie=None,
                 users=None, procs=None, cirgs=None, sched=None)
 
@@ -55,6 +57,14 @@ def load_file(file_name, mode='r'):
     with open(file_name, mode) as file:
         content = file.read()
     return content
+
+def save_json(content, file_name, mode='w'):
+    try:
+        with open(file_name, mode, encoding='utf-8') as file:
+            json.dump(content, file, indent=4)
+        return True
+    except:
+        return False
 
 def encode_file(file_name, mime_type='image/jpeg'):
     fig      = file_name
@@ -183,7 +193,7 @@ def load_data(period=6):
     # schedules
     agenda = pd.DataFrame()
     for user in users.id_usuario.unique():
-        sched  = get_request('sched', user, 0, period)
+        sched  = get_request('sched', user, period, period)
         agenda = pd.concat([agenda, pd.DataFrame.from_dict(sched)], axis=0)
     cols_drop  = ['nf','min_hour','cd_tipo2','local','desccir','tisstuss',
                   'telefone','celular','orcamento','vl_orcamento','conferido',
@@ -233,7 +243,7 @@ def get_intersections(curr_id, agenda, restrictions, interval=30):
                         conflicts.update({equip: equips_count[equip]})
     return pd.Series([len(s), len(conflicts), sl, spl, conflicts])
 
-def get_availability(required_equips, agenda, restrictions, interval=30):
+def get_availability(required_equips, agenda, restrictions, professionals=[], interval=30):
     mt, Mt  = agenda.inicio.min(), agenda.fim.max()
     ct = mt
     available = []
@@ -248,6 +258,10 @@ def get_availability(required_equips, agenda, restrictions, interval=30):
                     if equip in equips_count:
                         if equips_count[equip] >= v[equip]:
                             conflicts.update({equip: equips_count[equip]})
+        for prof in professionals:
+            if len(over.loc[over.id_usuario==prof]) > 0:
+                name = over.loc[over.id_usuario==prof].profissional.iloc[0]
+                conflicts.update({name: len(over.loc[over.id_usuario==prof])})
         available.append([ct, len(over), conflicts])
         ct += timedelta(minutes=interval)
     available = pd.DataFrame(available, columns=['datetime','rooms','equips'])
@@ -261,24 +275,34 @@ def get_availability(required_equips, agenda, restrictions, interval=30):
 
 def format_simultlist(df):
     if len(df) > 0:
-        df = df[['inicio','fim','profissional','descproc']]
+        df = df[['inicio','fim','profissional','descproc']].copy()
         df['date'] = df.inicio.dt.date
-        df['times'] = df.inicio
-        df['timee'] = df.fim
-        fig, ax = plt.subplots()
-        for i, row in df.iterrows():
-            ax.plot([row['times'],row['timee']], [len(df)-i,len(df)-i], lw=40)
-            ax.text(row['times'], len(df)-i, row['descproc']+' - '+row['profissional'], va='center', ha='left')
-        ax.set(ylabel=datetime.strftime(df.iloc[0].date, '%d/%m/%Y'))
+        df.reset_index(drop=True, inplace=True)
+        fig, ax = plt.subplots(figsize=(6.4, 3.6))
+        colors = plt.cm.Dark2(np.linspace(0,1,len(df)))
+        for i, row in df.iterrows(): 
+            # ax.plot([row['inicio'],row['fim']], [len(df)-i,len(df)-i], lw=10)
+            ax.hlines(len(df)-i, row['inicio'], row['fim'], color=colors[i], lw=40)
+            ax.text(row['inicio'], len(df)-i, row['descproc']+' - '+row['profissional'], va='center', ha='left')
+        ax.set(title=datetime.strftime(df.iloc[0].date, '%d/%m/%Y'))
         ax.margins(0.0, 0.2)
         ax.set_yticks([])
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=30)) 
+        ax.grid(axis='x', linewidth=1, color='#000000', alpha=0.4)
         for spine in plt.gca().spines.values():
             spine.set_visible(False)
         return fig
     else:
         return None
 
+def prepare_report(df, bycol, sortby, sortasc):
+    dfagg = df.groupby(bycol).agg({"vl_real":sum, "vl_comissao":sum, "cancelado":sum, "processado":sum, "id":len})
+    dfagg = dfagg.sort_values(by=sortby, ascending=sortasc)
+    dfagg.rename(columns={"vl_real":"Valor Total", "vl_comissao":"Valor Comissão","cancelado":"Cancelamentos",
+                          "processado":"Processados", "id":"Agendamentos"}, inplace=True)
+    dfagg['% Cancelamentos'] = 100 * dfagg.Cancelamentos / dfagg.Agendamentos
+    return dfagg
 
 
 ##############################################################################
@@ -343,15 +367,22 @@ else:
     equip_restrictions = json.loads(load_file(EQUIPS_FILE)) 
     restrictions       = json.loads(load_file(RESTR_FILE))
     procs              = state.procs
+    users              = state.users
 
     # MENU BAR
     with st.sidebar:
         st.title('Menu') 
         state.page         = st.selectbox('Operação', ['Agenda','Atendimentos','Relatório'])
-        period             = st.slider('Período', 1, 30, 6)
+        period             = st.slider('Período', 1, 90, 6)
         procedures         = st.sidebar.multiselect('Procedimentos', procs.id_procedimento, 
                              format_func=lambda x:procs.loc[procs.id_procedimento==x]['procedimento'].values[0])
         required_equips    = list_equipments(';'.join(procedures), equip_restrictions)
+        professional       = st.sidebar.multiselect('Profissional', users.id_usuario, 
+                             format_func=lambda x:users.loc[users.id_usuario==x]['nome'].values[0])
+        if state.page == 'Atendimentos':
+            show_all       = st.checkbox('Mostrar processados', False)
+        if state.page == 'Relatório':
+            period         = st.date_input('Período', (datetime.today()-timedelta(days=30), datetime.today()))
         update_sched       = st.button('Atualizar Dados')
 
     if update_sched:
@@ -362,50 +393,167 @@ else:
     st.title('{}'.format(state.page.upper()))        
     
     if state.page == 'Atendimentos':
-        st.write(state.page)
-       
+        
+        pending = agenda.loc[(agenda.id_usuario.isin(professional))&(agenda.fim<datetime.today())].copy()
+        pending.inicio = pending.inicio.apply(lambda x: datetime.strftime(x, '%d/%m/%Y %H:%M'))
+        pending.fim    = pending.fim.apply(lambda x: datetime.strftime(x, '%d/%m/%Y %H:%M'))
+        pending.vl_procedimento = pending.vl_procedimento.astype(float)
+        for i, row in pending.iterrows():
+            file_name = os.path.join(PROCESSED, "{}.json".format(row['id']))
+            if show_all or not os.path.isfile(file_name):
+                st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
+                st.success('Resumo da Operação') 
+                with st.beta_container():
+                    desc, form = st.beta_columns((1, 1))
+                    with desc:
+                        st.write(f"Profissional: {row['profissional']}")
+                        st.write(f"Início: {row['inicio']}")
+                        st.write(f"Término: {row['fim']}")
+                        st.write(f"Paciente: {row['paciente']}")
+                        st.write(f"Procedimentos: {row['descproc']}")
+                        st.write(f"Valor Total: {row['vl_procedimento']}") 
+                        if os.path.isfile(file_name):
+                            curr_content = json.loads(load_file(file_name))
+                            st.write(f"Valor Real: {curr_content['vl_total']}")
+                            st.write(f"Tipo de Comissão: {curr_content['tp']}")
+                            st.write(f"Forma de Pagamento: {curr_content['fmt']}") 
+                            st.write(f"Valor: {curr_content['vl_comissao']}")
+                    with form:                    
+                        vlb = st.number_input('Valor Real:', 0., 10000., row['vl_procedimento'], key=f'vlb{i}')
+                        tp  = st.selectbox('Tipo de Comissão:', ['R$', '%'], key=f'tp{i}')
+                        fmt = st.selectbox('Forma de Pagamento:', ['Dinheiro', 'Maquininha'], key=f'fmt{i}')
+                        pct = st.number_input('Valor:', 50 if tp == 'R$' else 70 if fmt == 'Dinheiro' else 60, key=f'pct{i}')
+                        vlr = round(vlb * pct / 100 if tp == '%' else pct, 2)
+                with st.beta_container():
+                    if os.path.isfile(file_name):
+                        st.success(f"Comissão: R$ {vlr}")  
+                    else:             
+                        st.warning(f"Comissão: R$ {vlr}")
+                    l, bt1, bt2, r = st.beta_columns((3, 1, 1, 3))  
+                    if bt1.button('Processar', key=f'btn{i}'):                    
+                        content = {"id": row['id'], "id_usuario": row['id_usuario'], 
+                                    "id_paciente": row['id_paciente'], "tp": tp, "fmt": fmt, "pct": pct, 
+                                    "vl_total": vlb, "vl_comissao": vlr
+                                    }
+                        if save_json(content, file_name):  
+                            st.success('Salvo') 
+                        st.experimental_rerun()
+                    if bt2.button('Desmarcar', key=f'btnc{i}'):                    
+                        content = {"id": row['id'], "id_usuario": row['id_usuario'], 
+                                    "id_paciente": row['id_paciente'], "tp": tp, "fmt": fmt, "pct": 0, 
+                                    "vl_total": 0, "vl_comissao": 0, "cancelado": True
+                                    }
+                        if save_json(content, file_name):
+                            st.success('Salvo')
+                        st.experimental_rerun()
+
+
     elif state.page == 'Agenda':
             
-        st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
-        st.subheader('Conflitos de sala e equipamentos')
+        df_incoming = agenda.loc[agenda.inicio>=datetime.today().replace(hour=0, minute=0)]
+
         # list all conflicts for rooms or equipments        
-        conflicts = agenda[['simult_list','simultproc_list','conflicts']].copy()
+        conflicts = df_incoming.copy()
+        conflicts = conflicts[['simult_list','simultproc_list','conflicts']]
         conflicts['hash1'] = conflicts['simult_list'].apply(lambda x: str(np.array(x)))
         conflicts['hash2'] = conflicts['simultproc_list'].apply(lambda x: str(np.array(x)))
         conflicts.drop_duplicates(inplace=True, subset=['hash1','hash2'])
         conflicts['conflict_room'] = conflicts.simult_list.apply(lambda x: format_simultlist(x))
         conflicts['conflict_proc'] = conflicts.simultproc_list.apply(lambda x: format_simultlist(x))
-        for idx, conflict in conflicts.iterrows():
-            if conflict['conflict_room'] or conflict['conflict_proc']:
-                col1, col2 = st.beta_columns(2)
-                if conflict['conflict_room']:
-                    col1.pyplot(conflict['conflict_room'])
-                if conflict['conflict_proc']:
-                    col1.pyplot(conflict['conflict_proc'])
-                    col2.warning('Conflito para os seguintes equipamentos: {}'.format(list(conflict['conflicts'].keys())))
+        conflicts.dropna(subset=['conflict_room', 'conflict_proc'], how='all', inplace=True)
+        conflicts.reset_index(drop=True, inplace=True)
+        if len(conflicts) > 0:
+            st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
+            st.subheader('Conflitos de sala e equipamentos') 
+            st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
+            cols = st.beta_columns(2)
+            for idx, conflict in conflicts.iterrows():
+                if conflict['conflict_room'] or conflict['conflict_proc']:
+                    if conflict['conflict_room']:
+                        cols[idx%2].pyplot(conflict['conflict_room'])
+                    if conflict['conflict_proc']:
+                        cols[idx%2].pyplot(conflict['conflict_proc'])
+                        # cols[idx%2].write('Conflito para os seguintes equipamentos: {}'.format(list(conflict['conflicts'].keys())))
         
+        # list availability        
+        st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
         st.subheader('Disponibilidade de sala e equipamentos')
-        # list availability            
-        available = get_availability(required_equips, agenda, restrictions)
+        st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
+        available = get_availability(required_equips, df_incoming, restrictions, professional)
         order = [7 + i * 0.5 for i in range(2*(21-7))]
-        g = sns.catplot(data=available, x='time', y='value', col='restriction', row='date', kind='bar', order=order, height=4) 
+        g = sns.catplot(data=available, x='time', y='value', col='restriction', row='date', 
+                        kind='bar', order=order, height=1.8, aspect=2.0) 
+        (g.set_axis_labels('','').set_titles('{col_name}|{row_name}'))
         # g.set_xticklabels(rotation=90)  
-        g.fig.subplots_adjust(hspace=.2) 
+        g.fig.subplots_adjust(hspace=.5) 
         for ax in g.axes.flat:                
             ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True)) 
             ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True)) 
-            ax.set(xlabel='', ylabel='')
             ax.xaxis.set_major_locator(ticker.MultipleLocator(2)) 
             ax.tick_params(labelbottom=True, labelsize='xx-small')
-            ax.set_title(ax.get_title(), fontsize='small')   
+            title = ax.get_title().upper().split('|')
+            aux   = title[1].split('-')
+            ax.set_title('{} ({}/{}/{})'.format(title[0], aux[2], aux[1], aux[0]), fontsize='small')   
             ax.grid(axis='y', linewidth=1, color='#000000', alpha=0.2)
         st.pyplot(g)
 
+
     elif state.page == 'Relatório':
-        st.write(state.users)
-        st.write(state.procs)
-        st.write(state.cirgs)
-        st.write(state.sched)   
+
+        if len(period) == 2:
+            inicio = datetime.combine(period[0], ttime.min)
+            fim    = datetime.combine(period[1], ttime.max)
+        else:
+            inicio = datetime.combine(period[0], ttime.min)
+            fim    = datetime.combine(period[0], ttime.max)
+        st.subheader('Período de {} a {}'.format(datetime.strftime(inicio, '%d/%m/%Y'), datetime.strftime(fim, '%d/%m/%Y')))
+        report = agenda.loc[(agenda.id_usuario.isin(professional))].copy()
+        report = report.loc[(report.inicio>=inicio)&(report.fim<=fim)]
+        report['vl_real'] = 0
+        report['vl_comissao'] = 0
+        report['pct'] = 0
+        report['tp'] = ''
+        report['fmt'] = ''
+        report['cancelado'] = False
+        report['processado'] = False
+        for i, row in report.iterrows():
+            file_name = os.path.join(PROCESSED, "{}.json".format(row['id']))
+            if os.path.isfile(file_name):
+                curr_content = json.loads(load_file(file_name))
+                if not "cancelado" in curr_content.keys():
+                    curr_content.update({"cancelado": False})
+                report.loc[i, 'vl_real']     = curr_content['vl_total']
+                report.loc[i, 'vl_comissao'] = curr_content['vl_comissao']
+                report.loc[i, 'pct']         = curr_content['pct']
+                report.loc[i, 'tp']          = curr_content['tp']
+                report.loc[i, 'fmt']         = curr_content['fmt']
+                report.loc[i, 'cancelado']   = curr_content['cancelado']
+                report.loc[i, 'processado']  = True
+        results = prepare_report(report, 'profissional', 'vl_real', False)
+        if len(results) > 0:
+            st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
+            for i, row in results.iterrows():
+                with st.beta_container():
+                    prof, vlb, vlc, ag, proc, canc = st.beta_columns((2,1,1,1,1,1))
+                    prof.success('**Profissional**  \n{}'.format(i))
+                    vlb.success('**Faturamento**  \nR$ {:.2f}'.format(row['Valor Total']))
+                    vlc.success('**Comissão**  \nR$ {:.2f}'.format(row['Valor Comissão']))
+                    ag.success('**Agendamentos**  \n{:.0f}'.format(row['Agendamentos']))
+                    proc.success('**Processado**  \n{:.2f} %'.format(100*row['Processados']/row['Agendamentos']))
+                    canc.success('**Cancelados**  \n{:.2f} %'.format(row['% Cancelamentos']))
+            st.subheader('Melhores clientes')
+            st.table(prepare_report(report, 'paciente', 'vl_comissao', False).head(10))
+            st.subheader('Procedimentos mais executados')
+            st.table(prepare_report(report, 'descproc', 'id', False).head(10))  
+            st.subheader('Comissão por tipo')
+            st.table(prepare_report(report, 'tp', 'id', False))  
+            st.subheader('Atendimentos')
+            report.rename(columns={'inicio':'Data','paciente':'Paciente','descproc':'Procedimentos',
+                                    'vl_comissao':'Comissão'}, inplace=True)      
+            report.Data = report.Data.apply(lambda x: datetime.strftime(x, '%d/%m/%Y %H:%M'))
+            report.set_index(pd.Index([i for i in range(1, len(report)+1)]), drop=True, inplace=True)
+            st.write(report.loc[report.cancelado==0][['Data','Paciente','Procedimentos','Comissão']]) 
+            # st.table(report.loc[report.cancelado==0][['Data','Paciente','Procedimentos','Comissão']])        
 
 
     with st.sidebar:
