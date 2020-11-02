@@ -63,8 +63,8 @@ def save_json(content, file_name, mode='w'):
         with open(file_name, mode, encoding='utf-8') as file:
             json.dump(content, file, indent=4)
         return True
-    except:
-        return False
+    except e:
+        return e
 
 def encode_file(file_name, mime_type='image/jpeg'):
     fig      = file_name
@@ -439,8 +439,11 @@ else:
                                     "id_paciente": row['id_paciente'], "tp": tp, "fmt": fmt, "pct": pct, 
                                     "vl_total": vlb, "vl_comissao": vlr
                                     }
-                        if save_json(content, file_name):  
+                        save = save_json(content, file_name)
+                        if save == True:  
                             st.success('Salvo') 
+                        else:
+                            print(save)
                         st.experimental_rerun()
                     if bt2.button('Desmarcar', key=f'btnc{i}'):                    
                         content = {"id": row['id'], "id_usuario": row['id_usuario'], 
