@@ -411,13 +411,13 @@ else:
                         st.write(f"Término: {row['fim']}")
                         st.write(f"Paciente: {row['paciente']}")
                         st.write(f"Procedimentos: {row['descproc']}")
-                        st.write(f"Valor Total: {row['vl_procedimento']}") 
+                        st.write(f"Valor Total: R$ {row['vl_procedimento']:.2f}") 
                         if os.path.isfile(file_name):
                             curr_content = json.loads(load_file(file_name))
-                            st.write(f"Valor Real: {curr_content['vl_total']}")
+                            st.write(f"Valor Real: R$ {curr_content['vl_total']:.2f}")
                             st.write(f"Tipo de Comissão: {curr_content['tp']}")
                             st.write(f"Forma de Pagamento: {curr_content['fmt']}") 
-                            st.write(f"Valor: {curr_content['vl_comissao']}")
+                            st.write(f"Valor da Comissão: R$ {curr_content['vl_comissao']:.2f}")
                     with form:                    
                         vlb = st.number_input('Valor Real:', 0., 10000., row['vl_procedimento'], key=f'vlb{i}')
                         tp  = st.selectbox('Tipo de Comissão:', ['R$', '%'], key=f'tp{i}')
@@ -426,9 +426,13 @@ else:
                         vlr = round(vlb * pct / 100 if tp == '%' else pct, 2)
                 with st.beta_container():
                     if os.path.isfile(file_name):
-                        st.success(f"Comissão: R$ {vlr}")  
+                        if "cancelado" in curr_content:
+                            if curr_content['cancelado']:
+                                st.error(f"Comissão: R$ {vlr} (CANCELADO)")
+                            else:
+                                st.success(f"Comissão: R$ {vlr} (PROCESSADO)")  
                     else:             
-                        st.warning(f"Comissão: R$ {vlr}")
+                        st.warning(f"Comissão: R$ {vlr} (PENDENTE)")
                     l, bt1, bt2, r = st.beta_columns((3, 1, 1, 3))  
                     if bt1.button('Processar', key=f'btn{i}'):                    
                         content = {"id": row['id'], "id_usuario": row['id_usuario'], 
