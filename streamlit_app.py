@@ -444,7 +444,7 @@ else:
                             st.success('Salvo') 
                         else:
                             st.error(save)
-                        st.experimental_rerun()
+                        # st.experimental_rerun()
                     if bt2.button('Desmarcar', key=f'btnc{i}'):                    
                         content = {"id": row['id'], "id_usuario": row['id_usuario'], 
                                     "id_paciente": row['id_paciente'], "tp": tp, "fmt": fmt, "pct": 0, 
