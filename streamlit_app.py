@@ -63,7 +63,7 @@ def save_json(content, file_name, mode='w'):
         with open(file_name, mode, encoding='utf-8') as file:
             json.dump(content, file, indent=4)
         return True
-    except e:
+    except Exception as e:
         return e
 
 def encode_file(file_name, mime_type='image/jpeg'):
