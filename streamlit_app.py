@@ -160,12 +160,15 @@ def get_request(event, user=None, periodb=30, perioda=30):
     return {'error': 'no data available'}
 
 def list_equipments(x, equip_restrictions):
-    procs  = x.split(';')
-    equips = []
-    for proc in procs:
-        if proc in equip_restrictions.keys():
-            equips.append(equip_restrictions[proc])
-    return list(np.array(equips).flatten())
+    if x:
+        procs  = x.split(';')
+        equips = []
+        for proc in procs:
+            if proc in equip_restrictions.keys():
+                equips.append(equip_restrictions[proc])
+        return list(np.array(equips).flatten())
+    else:
+        return []
 
 def load_data(period=6):
     # restrictions
