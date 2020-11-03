@@ -248,6 +248,7 @@ def get_intersections(curr_id, agenda, restrictions, interval=30):
 
 def get_availability(required_equips, agenda, restrictions, professionals=[], interval=30):
     mt, Mt  = agenda.inicio.min(), agenda.fim.max()
+    mt = mt.replace(minute=0, second=0, microsecond=0)
     ct = mt
     available = []
     while ct < Mt:
@@ -458,9 +459,11 @@ else:
                         st.experimental_rerun()
 
 
-    elif state.page == 'Agenda':
-            
+    elif state.page == 'Agenda':            
+
         df_incoming = agenda.loc[agenda.inicio>=datetime.today().replace(hour=0, minute=0)]
+        fim = (datetime.today() + timedelta(days=period)).replace(hour=23, minute=59)
+        df_incoming = df_incoming.loc[df_incoming.fim<=fim]
 
         # list all conflicts for rooms or equipments        
         conflicts = df_incoming.copy()
@@ -485,7 +488,7 @@ else:
                         cols[idx%2].pyplot(conflict['conflict_proc'])
                         # cols[idx%2].write('Conflito para os seguintes equipamentos: {}'.format(list(conflict['conflicts'].keys())))
         
-        # list availability        
+        # list availability   
         st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
         st.subheader('Disponibilidade de sala e equipamentos')
         st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
@@ -494,7 +497,7 @@ else:
         g = sns.catplot(data=available, x='time', y='value', col='restriction', row='date', 
                         kind='bar', order=order, height=1.8, aspect=2.0) 
         (g.set_axis_labels('','').set_titles('{col_name}|{row_name}'))
-        # g.set_xticklabels(rotation=90)  
+        g.set_xticklabels(rotation=90)  
         g.fig.subplots_adjust(hspace=.5) 
         for ax in g.axes.flat:                
             ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True)) 
