@@ -448,7 +448,7 @@ else:
                             st.success('Salvo') 
                         else:
                             st.error(save)
-                        # st.experimental_rerun()
+                        st.experimental_rerun()
                     if bt2.button('Desmarcar', key=f'btnc{i}'):                    
                         content = {"id": row['id'], "id_usuario": row['id_usuario'], 
                                     "id_paciente": row['id_paciente'], "tp": tp, "fmt": fmt, "pct": 0, 
@@ -497,7 +497,7 @@ else:
         g = sns.catplot(data=available, x='time', y='value', col='restriction', row='date', 
                         kind='bar', order=order, height=1.8, aspect=2.0) 
         (g.set_axis_labels('','').set_titles('{col_name}|{row_name}'))
-        g.set_xticklabels(rotation=90)  
+        # g.set_xticklabels(rotation=90)  
         g.fig.subplots_adjust(hspace=.5) 
         for ax in g.axes.flat:                
             ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True)) 
