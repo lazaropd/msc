@@ -133,7 +133,7 @@ def disconnect_database():
     state.sched      = None
     st.experimental_rerun()
 
-def get_request(event, user=None, periodb=30, perioda=30):
+def get_request(event, user=None, period=None):
     if event == 'users':
         endpoint = users_path
     elif event == 'procs':
@@ -142,8 +142,10 @@ def get_request(event, user=None, periodb=30, perioda=30):
         endpoint = cirgs_path
     elif event == 'sched':
         endpoint = sched_path
-        dt_from = datetime.now() - timedelta(days=periodb)
-        dt_to   = datetime.now() + timedelta(days=perioda)
+        dt_from = period[0]
+        dt_to   = period[1]
+        st.write(dt_from)
+        st.write(dt_to)
         endpoint = endpoint.replace('FROM', datetime.strftime(dt_from, '%Y-%m-%d'))
         endpoint = endpoint.replace(  'TO', datetime.strftime(dt_to  , '%Y-%m-%d'))
         endpoint = endpoint.replace('USER', user)
@@ -170,7 +172,7 @@ def list_equipments(x, equip_restrictions):
     else:
         return []
 
-def load_data(period=6):
+def load_data(period=None):
     # restrictions
     equip_restrictions = json.loads(load_file(EQUIPS_FILE)) 
     restrictions       = json.loads(load_file(RESTR_FILE))
@@ -196,7 +198,7 @@ def load_data(period=6):
     # schedules
     agenda = pd.DataFrame()
     for user in users.id_usuario.unique():
-        sched  = get_request('sched', user, period, period)
+        sched  = get_request('sched', user, period)
         agenda = pd.concat([agenda, pd.DataFrame.from_dict(sched)], axis=0)
     cols_drop  = ['nf','min_hour','cd_tipo2','local','desccir','tisstuss',
                   'telefone','celular','orcamento','vl_orcamento','conferido',
@@ -282,6 +284,20 @@ def format_simultlist(df):
         df = df[['inicio','fim','profissional','descproc']].copy()
         df['date'] = df.inicio.dt.date
         df.reset_index(drop=True, inplace=True)
+        return df
+    else:
+        return None
+
+def merge_data(dfs):
+    df = pd.DataFrame()
+    for d in dfs:
+        if isinstance(d, pd.DataFrame):
+            df = pd.concat([df, d], axis=0)
+    df.drop_duplicates(inplace=True)
+    return df
+
+def plot_gantt(df):
+    if isinstance(df, pd.DataFrame):
         fig, ax = plt.subplots(figsize=(6.4, 3.6))
         colors = plt.cm.Dark2(np.linspace(0,1,len(df)))
         for i, row in df.iterrows(): 
@@ -303,9 +319,9 @@ def format_simultlist(df):
 def prepare_report(df, bycol, sortby, sortasc):
     dfagg = df.groupby(bycol).agg({"vl_real":sum, "vl_comissao":sum, "cancelado":sum, "processado":sum, "id":len})
     dfagg = dfagg.sort_values(by=sortby, ascending=sortasc)
-    dfagg.rename(columns={"vl_real":"Valor Total", "vl_comissao":"Valor Comissão","cancelado":"Cancelamentos",
+    dfagg.rename(columns={"vl_real":"Faturado", "vl_comissao":"Comissão","cancelado":"Cancelados",
                           "processado":"Processados", "id":"Agendamentos"}, inplace=True)
-    dfagg['% Cancelamentos'] = 100 * dfagg.Cancelamentos / dfagg.Agendamentos
+    dfagg['% Cancelados'] = round(100 * dfagg.Cancelados / dfagg.Agendamentos, 2)  
     return dfagg
 
 
@@ -376,8 +392,14 @@ else:
     # MENU BAR
     with st.sidebar:
         st.title('Menu') 
-        state.page         = st.selectbox('Operação', ['Agenda','Atendimentos','Relatório'])
-        period             = st.slider('Período', 1, 90, 6)
+        state.page         = st.selectbox('Operação', ['Conflitos','Agenda','Atendimentos','Relatório'])
+        period             = st.date_input('Período', (datetime.today()-timedelta(days=7), datetime.today()+timedelta(days=7)))
+        if len(period) == 2:
+            inicio = datetime.combine(period[0], ttime.min)
+            fim    = datetime.combine(period[1], ttime.max)
+        else:
+            inicio = datetime.combine(period[0], ttime.min)
+            fim    = datetime.combine(period[0], ttime.max)
         procedures         = st.sidebar.multiselect('Procedimentos', procs.id_procedimento, 
                              format_func=lambda x:procs.loc[procs.id_procedimento==x]['procedimento'].values[0])
         required_equips    = list_equipments(';'.join(procedures), equip_restrictions)
@@ -385,8 +407,6 @@ else:
                              format_func=lambda x:users.loc[users.id_usuario==x]['nome'].values[0])
         if state.page == 'Atendimentos':
             show_all       = st.checkbox('Mostrar processados', False)
-        if state.page == 'Relatório':
-            period         = st.date_input('Período', (datetime.today()-timedelta(days=30), datetime.today()))
         update_sched       = st.button('Atualizar Dados')
 
     if update_sched:
@@ -459,35 +479,38 @@ else:
                         st.experimental_rerun()
 
 
-    elif state.page == 'Agenda':            
+    elif state.page == 'Conflitos':            
 
         df_incoming = agenda.loc[agenda.inicio>=datetime.today().replace(hour=0, minute=0)]
-        fim = (datetime.today() + timedelta(days=period)).replace(hour=23, minute=59)
         df_incoming = df_incoming.loc[df_incoming.fim<=fim]
 
         # list all conflicts for rooms or equipments        
         conflicts = df_incoming.copy()
         conflicts = conflicts[['simult_list','simultproc_list','conflicts']]
-        conflicts['hash1'] = conflicts['simult_list'].apply(lambda x: str(np.array(x)))
-        conflicts['hash2'] = conflicts['simultproc_list'].apply(lambda x: str(np.array(x)))
-        conflicts.drop_duplicates(inplace=True, subset=['hash1','hash2'])
         conflicts['conflict_room'] = conflicts.simult_list.apply(lambda x: format_simultlist(x))
         conflicts['conflict_proc'] = conflicts.simultproc_list.apply(lambda x: format_simultlist(x))
         conflicts.dropna(subset=['conflict_room', 'conflict_proc'], how='all', inplace=True)
+        conflicts['conflict_list'] = conflicts[['conflict_room','conflict_proc']].apply(lambda x: merge_data(x), axis=1)
+        conflicts['hash'] = conflicts['conflict_list'].apply(lambda x: str(np.array(x)))
+        conflicts.drop_duplicates(inplace=True, subset=['hash'])
         conflicts.reset_index(drop=True, inplace=True)
+        conflicts['conflict_list'] = conflicts.conflict_list.apply(lambda x: plot_gantt(x))
         if len(conflicts) > 0:
             st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
             st.subheader('Conflitos de sala e equipamentos') 
             st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
-            cols = st.beta_columns(2)
+            ncols = 3
+            cols = st.beta_columns(ncols)
             for idx, conflict in conflicts.iterrows():
-                if conflict['conflict_room'] or conflict['conflict_proc']:
-                    if conflict['conflict_room']:
-                        cols[idx%2].pyplot(conflict['conflict_room'])
-                    if conflict['conflict_proc']:
-                        cols[idx%2].pyplot(conflict['conflict_proc'])
-                        # cols[idx%2].write('Conflito para os seguintes equipamentos: {}'.format(list(conflict['conflicts'].keys())))
+                if conflict['conflict_list']:
+                    cols[idx%ncols].pyplot(conflict['conflict_list'])
         
+
+    elif state.page == 'Agenda':            
+
+        df_incoming = agenda.loc[agenda.inicio>=datetime.today().replace(hour=0, minute=0)]
+        df_incoming = df_incoming.loc[df_incoming.fim<=fim]
+
         # list availability   
         st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)
         st.subheader('Disponibilidade de sala e equipamentos')
@@ -513,12 +536,7 @@ else:
 
     elif state.page == 'Relatório':
 
-        if len(period) == 2:
-            inicio = datetime.combine(period[0], ttime.min)
-            fim    = datetime.combine(period[1], ttime.max)
-        else:
-            inicio = datetime.combine(period[0], ttime.min)
-            fim    = datetime.combine(period[0], ttime.max)
+        fim = datetime.today() 
         st.subheader('Período de {} a {}'.format(datetime.strftime(inicio, '%d/%m/%Y'), datetime.strftime(fim, '%d/%m/%Y')))
         report = agenda.loc[(agenda.id_usuario.isin(professional))].copy()
         report = report.loc[(report.inicio>=inicio)&(report.fim<=fim)]
@@ -549,11 +567,11 @@ else:
                 with st.beta_container():
                     prof, vlb, vlc, ag, proc, canc = st.beta_columns((2,1,1,1,1,1))
                     prof.success('**Profissional**  \n{}'.format(i))
-                    vlb.success('**Faturamento**  \nR$ {:.2f}'.format(row['Valor Total']))
-                    vlc.success('**Comissão**  \nR$ {:.2f}'.format(row['Valor Comissão']))
-                    ag.success('**Agendamentos**  \n{:.0f}'.format(row['Agendamentos']))
-                    proc.success('**Processado**  \n{:.2f} %'.format(100*row['Processados']/row['Agendamentos']))
-                    canc.success('**Cancelados**  \n{:.2f} %'.format(row['% Cancelamentos']))
+                    vlb.success('**Faturado**  \n{:.2f}'.format(row['Faturado']))
+                    vlc.success('**Comissão**  \n{:.2f}'.format(row['Comissão']))
+                    ag.success('**Agendados**  \n{:.0f}'.format(row['Agendamentos']))
+                    proc.success('**Processados**  \n{:.2f} %'.format(100*row['Processados']/row['Agendamentos']))
+                    canc.success('**Cancelados**  \n{:.2f} %'.format(row['% Cancelados']))
             st.subheader('Melhores clientes')
             st.table(prepare_report(report, 'paciente', 'vl_comissao', False).head(10))
             st.subheader('Procedimentos mais executados')
@@ -565,7 +583,7 @@ else:
                                     'vl_comissao':'Comissão'}, inplace=True)      
             report.Data = report.Data.apply(lambda x: datetime.strftime(x, '%d/%m/%Y %H:%M'))
             report.set_index(pd.Index([i for i in range(1, len(report)+1)]), drop=True, inplace=True)
-            st.write(report.loc[report.cancelado==0][['Data','Paciente','Procedimentos','Comissão']]) 
+            st.table(report.loc[report.cancelado==0][['Data','Paciente','Procedimentos','Comissão']]) 
             # st.table(report.loc[report.cancelado==0][['Data','Paciente','Procedimentos','Comissão']])        
 
 

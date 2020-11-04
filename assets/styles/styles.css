@@ -170,6 +170,10 @@ div.element-container > div.Widget:not(.stNumberInput):not(.stTimeInput):not(.st
 }
 .stAlert > div > div > div > p{
     text-align: center;
+    font-size: 0.9rem;
+}
+.stAlert > div{
+    padding: 5px;
 }
 span.as{background-color: var(--bgbutcolor) !important;}
 .stCheckbox label>span{background-color: var(--bgbutcolor) !important;}
