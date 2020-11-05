@@ -96,11 +96,14 @@ def validate_jwt():
     return False
 
 def load_session_id():
-    cookies = browser_cookie3.chrome(domain_name=domain_name)
-    cookies = requests.utils.dict_from_cookiejar(cookies)
     session_id = ''
-    if 'PHPSESSID' in cookies.keys():
-        session_id = cookies['PHPSESSID']
+    try:
+        cookies = browser_cookie3.chrome(domain_name=domain_name)
+        cookies = requests.utils.dict_from_cookiejar(cookies)
+        if 'PHPSESSID' in cookies.keys():
+            session_id = cookies['PHPSESSID']
+    except:
+        pass
     return session_id    
 
 def connect_database_old():

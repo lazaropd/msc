@@ -2,10 +2,15 @@ import pandas as pd
 import json
 import requests
 
+import os
+# x = os.path.join(os.getenv('LOCALAPPDATA', ''), '..\Local\\Google\\Chrome\\User Data\\Default\\Cookies')
+# print(x)
+
 
 import browser_cookie3
-cookies = browser_cookie3.chrome(domain_name='.google.com')
-# print(cookies)
+cookie_file = os.path.join(os.getenv('LOCALAPPDATA', ''), '..\Local\\Google\\Chrome\\User Data\\Default\\Cookies')
+cookies = browser_cookie3.chrome(domain_name='.google.com', cookie_file=cookie_file)
+print(cookies)
 
 # import os
 # import json
