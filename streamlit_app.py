@@ -3,6 +3,7 @@ import json
 import time
 import base64 
 import requests
+import browser_cookie3
 import SessionState
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from datetime import datetime, timedelta, time as ttime
 
 
 # ENDPOINTS 
+domain_name = '.mysmartclinic.com.br'
 login_path  = 'https://app.mysmartclinic.com.br/API/controllers/user/login.php'
 cookie_path = 'https://app.mysmartclinic.com.br/ajax/session.php'
 jwtval_path = 'https://app.mysmartclinic.com.br/ajax/login.php'
@@ -92,6 +94,14 @@ def validate_jwt():
         # state.cookie  = s.cookies.get_dict()
         return True
     return False
+
+def load_session_id():
+    cookies = browser_cookie3.chrome(domain_name=domain_name)
+    cookies = requests.utils.dict_from_cookiejar(cookies)
+    session_id = ''
+    if 'PHPSESSID' in cookies.keys():
+        session_id = cookies['PHPSESSID']
+    return session_id    
 
 def connect_database_old():
     # couldnt figure out how to keep Session alive from Python, 
@@ -344,7 +354,8 @@ def login_widget():
     with st.beta_container():
         lph, title, rph = st.beta_columns((1, 2, 1))
         with title:            
-            cookie = st.text_input('Cookie')
+            session_id = load_session_id()
+            cookie = st.text_input('Cookie', session_id)
     with st.beta_container():
         lph, but, rph = st.beta_columns((10, 1, 10))
         with but:

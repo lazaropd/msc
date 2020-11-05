@@ -1,3 +1,4 @@
 streamlit==0.69.1
 matplotlib==3.3.2
 seaborn==0.11.0
+browser_cookie3==0.11.4
