@@ -3,7 +3,6 @@ import json
 import time
 import base64 
 import requests
-import browser_cookie3
 import SessionState
 import numpy as np
 import pandas as pd
@@ -97,13 +96,13 @@ def validate_jwt():
 
 def load_session_id():
     session_id = ''
-    try:
-        cookies = browser_cookie3.chrome(domain_name=domain_name)
-        cookies = requests.utils.dict_from_cookiejar(cookies)
-        if 'PHPSESSID' in cookies.keys():
-            session_id = cookies['PHPSESSID']
-    except:
-        pass
+    # try:
+    #     cookies = browser_cookie3.chrome(domain_name=domain_name)
+    #     cookies = requests.utils.dict_from_cookiejar(cookies)
+    #     if 'PHPSESSID' in cookies.keys():
+    #         session_id = cookies['PHPSESSID']
+    # except:
+    #     pass
     return session_id    
 
 def connect_database_old():
@@ -357,7 +356,7 @@ def login_widget():
     with st.beta_container():
         lph, title, rph = st.beta_columns((1, 2, 1))
         with title:            
-            session_id = load_session_id()
+            # session_id = load_session_id()
             cookie = st.text_input('Cookie', session_id)
     with st.beta_container():
         lph, but, rph = st.beta_columns((10, 1, 10))
@@ -365,8 +364,8 @@ def login_widget():
             if st.button('Entrar'):
                 state.cookie     = cookie
                 state.authorized = connect_database() 
-                # if state.authorized:
-                #     load_data()
+                if state.authorized:
+                    load_data()
                 st.experimental_rerun()
     st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True) 
     st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)  
