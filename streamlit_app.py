@@ -356,7 +356,7 @@ def login_widget():
     with st.beta_container():
         lph, title, rph = st.beta_columns((1, 2, 1))
         with title:            
-            # session_id = load_session_id()
+            session_id = load_session_id()
             cookie = st.text_input('Cookie', session_id)
     with st.beta_container():
         lph, but, rph = st.beta_columns((10, 1, 10))
