@@ -365,8 +365,8 @@ def login_widget():
             if st.button('Entrar'):
                 state.cookie     = cookie
                 state.authorized = connect_database() 
-                if state.authorized:
-                    load_data()
+                # if state.authorized:
+                #     load_data()
                 st.experimental_rerun()
     st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True) 
     st.markdown("<div class='spacediv'></div>", unsafe_allow_html=True)  
