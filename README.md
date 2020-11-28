@@ -1,4 +1,4 @@
-# My Smart Clinic Plugin
+# My Smart Clinic Plugin [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/lazaropd/msc/main)
 
 This is an open plugin for My Smart Clinic app.
 
